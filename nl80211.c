@@ -63,6 +63,34 @@ static struct avl_tree phy_tree = AVL_TREE_INIT(phy_tree, avl_strcmp, false, NUL
 static struct avl_tree wif_tree = AVL_TREE_INIT(wif_tree, avl_strcmp, false, NULL);
 static struct avl_tree sta_tree = AVL_TREE_INIT(sta_tree, avl_addrcmp, false, NULL);
 
+static void sysfs_find_path(struct wifi_phy *phy)
+{
+	char path[PATH_MAX];
+	char link[PATH_MAX];
+	char *start, *stop;
+
+	snprintf(path, sizeof(path), "/sys/class/ieee80211/%s", phy->name);
+	if (readlink(path, link, sizeof(link)) < 0)
+		goto out;
+
+	start = strstr(link, "devices/");
+	if (!start)
+		goto out;
+	start += 8;
+	if (strstr(start, "pci/"))
+		start = strstr(start, "soc/");
+	stop = strstr(start, "/ieee80211");
+	if (stop)
+		*stop = '\0';
+
+	strcpy(phy->path, start);
+	return;
+
+out:
+	ULOG_ERR("failed to readlink %s\n", path);
+	strcpy(phy->path, phy->name);
+}
+
 static int ieee80211_frequency_to_channel(int freq)
 {
 	/* see 802.11-2007 17.3.8.3.2 and Annex J */
@@ -333,6 +361,7 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 
 		memset(phy, 0, sizeof(*phy));
 		strncpy(phy->name, name, IF_NAMESIZE);
+		sysfs_find_path(phy);
 		phy->avl.key = phy->name;
 		INIT_LIST_HEAD(&phy->wifs);
 		avl_insert(&phy_tree, &phy->avl);
@@ -645,7 +674,7 @@ int dump_phy(struct ubus_context *ctx,
 	blob_buf_init(&b, 0);
 
 	avl_for_each_element(&phy_tree, phy, avl) {
-		void *p = blobmsg_open_table(&b, phy->name);
+		void *p = blobmsg_open_table(&b, phy->path);
 		void *a = blobmsg_open_array(&b, "band");
 		int temp = phy_get_temp(phy->name);
 		void *c;
@@ -714,7 +743,7 @@ int dump_iface(struct ubus_context *ctx,
 			if (!wif->name || !*wif->name || !wif->type || !iface_is_up(wif->name))
 				continue;
 			if (p)
-				p = blobmsg_open_table(&b, phy->name);
+				p = blobmsg_open_table(&b, phy->path);
 			w = blobmsg_open_table(&b, wif->name);
 
 			if (*wif->ssid)
@@ -794,7 +823,7 @@ int dump_station(struct ubus_context *ctx,
 				void *s;
 
 				if (!p)
-					p = blobmsg_open_table(&b, phy->name);
+					p = blobmsg_open_table(&b, phy->path);
 				if (!w)
 					w = blobmsg_open_table(&b, wif->name);
 

@@ -30,6 +30,7 @@
 struct wifi_phy {
 	struct avl_node avl;
 	char name[IF_NAMESIZE];
+	char path[PATH_MAX];
 	struct list_head wifs;
 
 	uint16_t ht_capa;
