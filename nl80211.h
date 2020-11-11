@@ -53,7 +53,6 @@ struct wifi_iface {
 	struct avl_node avl;
 	uint8_t addr[6];
 	char saddr[18];
-	int ifidx;
 	int noise;
 	char name[IF_NAMESIZE];
 	char ssid[33];

@@ -266,7 +266,7 @@ static void nl80211_del_station(struct nlattr **tb, char *ifname)
 	_nl80211_del_station(sta);
 }
 
-static void nl80211_add_iface(struct nlattr **tb, char *ifname, char *phyname, int ifidx)
+static void nl80211_add_iface(struct nlattr **tb, char *ifname, char *phyname)
 {
 	struct wifi_iface *wif;
 	uint8_t *addr;
@@ -288,7 +288,6 @@ static void nl80211_add_iface(struct nlattr **tb, char *ifname, char *phyname, i
 		INIT_LIST_HEAD(&wif->stas);
 		avl_insert(&wif_tree, &wif->avl);
 		memcpy(wif->addr, addr, 6);
-		wif->ifidx = ifidx;
 		wif->parent = avl_find_element(&phy_tree, phyname, wif->parent, avl);
 		if (wif->parent)
 			list_add(&wif->phy, &wif->parent->wifs);
@@ -500,7 +499,7 @@ static int nl80211_recv(struct nl_msg *msg, void *arg)
 		nl80211_del_station(tb, ifname);
 		break;
 	case NL80211_CMD_NEW_INTERFACE:
-		nl80211_add_iface(tb, ifname, phyname, ifidx);
+		nl80211_add_iface(tb, ifname, phyname);
 		break;
 	case NL80211_CMD_DEL_INTERFACE:
 		nl80211_del_iface(tb, ifname);
@@ -555,7 +554,7 @@ static void nl80211_poll_stations(struct uloop_timeout *t)
 		struct nl_msg *msg;
 
 		msg = unl_genl_msg(&unl, NL80211_CMD_GET_STATION, true);
-		nla_put_u32(msg, NL80211_ATTR_IFINDEX, wif->ifidx);
+		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
 		unl_genl_request(&unl, msg, nl80211_recv, NULL);
 	}
 	uloop_timeout_set(t, 5 * 1000);
