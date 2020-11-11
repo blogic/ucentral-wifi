@@ -809,7 +809,6 @@ int dump_station(struct ubus_context *ctx,
 
 	avl_for_each_element(&phy_tree, phy, avl) {
 		struct wifi_iface *wif;
-		void *p = NULL;
 
 		list_for_each_entry(wif, &phy->wifs, phy) {
 			struct wifi_station *sta;
@@ -821,8 +820,6 @@ int dump_station(struct ubus_context *ctx,
 			list_for_each_entry(sta, &wif->stas, iface) {
 				void *s;
 
-				if (!p)
-					p = blobmsg_open_table(&b, phy->path);
 				if (!w)
 					w = blobmsg_open_table(&b, wif->name);
 
@@ -852,8 +849,6 @@ int dump_station(struct ubus_context *ctx,
 			if (w)
 				blobmsg_close_array(&b, w);
 		}
-		if (p)
-			blobmsg_close_table(&b, p);
 	}
 	ubus_send_reply(ctx, req, b.head);
 	return UBUS_STATUS_OK;
