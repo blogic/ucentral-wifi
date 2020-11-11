@@ -821,9 +821,10 @@ int dump_station(struct ubus_context *ctx,
 				void *s;
 
 				if (!w)
-					w = blobmsg_open_table(&b, wif->name);
+					w = blobmsg_open_array(&b, wif->name);
 
-				s = blobmsg_open_table(&b, sta->saddr);
+				s = blobmsg_open_table(&b, NULL);
+				blobmsg_add_string(&b, "mac", sta->saddr);
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)
