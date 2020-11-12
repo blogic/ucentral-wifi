@@ -17,7 +17,7 @@
 
 #include "wifi.h"
 
-struct ubus_auto_conn conn;
+static struct ubus_auto_conn conn;
 
 static const struct ubus_method wifi_methods[] = {
 	UBUS_METHOD_NOARG("phy", dump_phy),
