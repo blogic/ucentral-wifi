@@ -512,7 +512,7 @@ static int nl80211_recv(struct nl_msg *msg, void *arg)
 		nl80211_add_phy(tb, phyname);
 		break;
 	default:
-		syslog(0, "%s:%s[%d]%d\n", __FILE__, __func__, __LINE__, gnlh->cmd);
+		//syslog(0, "%s:%s[%d]%d\n", __FILE__, __func__, __LINE__, gnlh->cmd);
 		break;
 	}
 
