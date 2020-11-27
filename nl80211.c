@@ -297,8 +297,13 @@ static void nl80211_add_iface(struct nlattr **tb, char *ifname, char *phyname)
 	}
 
 	if (tb[NL80211_ATTR_SSID]) {
-		memset(wif->ssid, 0, sizeof(wif->ssid));
-		strncpy(wif->ssid, nla_get_string(tb[NL80211_ATTR_SSID]), sizeof(wif->ssid));
+		unsigned int len = nla_len(tb[NL80211_ATTR_SSID]);
+
+		if (len >= sizeof(wif->ssid))
+			len = sizeof(wif->ssid) - 1;
+
+		memcpy(wif->ssid, nla_data(tb[NL80211_ATTR_SSID]), len);
+		wif->ssid[len] = 0;
 	} else
 		*wif->ssid = '\0';
 	if (tb[NL80211_ATTR_WIPHY_TX_POWER_LEVEL])
