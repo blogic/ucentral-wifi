@@ -68,6 +68,8 @@ static void sysfs_find_path(struct wifi_phy *phy)
 	char path[PATH_MAX];
 	char link[PATH_MAX];
 	char *start, *stop;
+	glob_t gl;
+	unsigned int seq;
 
 	snprintf(path, sizeof(path), "/sys/class/ieee80211/%s", phy->name);
 	if (readlink(path, link, sizeof(link)) < 0)
@@ -84,6 +86,20 @@ static void sysfs_find_path(struct wifi_phy *phy)
 		*stop = '\0';
 
 	strcpy(phy->path, start);
+
+	snprintf(path, sizeof(path), "/sys/class/ieee80211/%s/device/ieee80211/*", phy->name);
+
+	if (glob(path, 0, NULL, &gl))
+		return;
+	for (seq = 0; seq < gl.gl_pathc; seq++) {
+
+		if (!strcmp(basename(gl.gl_pathv[seq]), phy->name))
+			break;
+	}
+	globfree(&gl);
+	if (seq)
+		sprintf(&phy->path[strlen(phy->path)], "+%d", seq);
+
 	return;
 
 out:
@@ -402,6 +418,44 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 			if (tb_band[NL80211_BAND_ATTR_VHT_CAPA])
 				phy->vht_capa = nla_get_u32(tb_band[NL80211_BAND_ATTR_VHT_CAPA]);
 
+			if (tb_band[NL80211_BAND_ATTR_IFTYPE_DATA]) {
+				struct nlattr *nl_iftype;
+				int rem_band;
+
+				nla_for_each_nested(nl_iftype, tb_band[NL80211_BAND_ATTR_IFTYPE_DATA], rem_band) {
+					struct nlattr *tb_he[NL80211_BAND_IFTYPE_ATTR_MAX + 1];
+					struct nlattr *tb_flags[NL80211_IFTYPE_MAX + 1];
+
+					nla_parse(tb_he, NL80211_BAND_IFTYPE_ATTR_MAX,
+						  nla_data(nl_iftype), nla_len(nl_iftype), NULL);
+					if (!tb_he[NL80211_BAND_IFTYPE_ATTR_IFTYPES])
+						continue;
+					if (nla_parse_nested(tb_flags, NL80211_IFTYPE_MAX,
+							     tb_he[NL80211_BAND_IFTYPE_ATTR_IFTYPES], NULL))
+						continue;
+					if (!tb_flags[NL80211_IFTYPE_AP])
+						continue;
+					if (tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_MAC]) {
+						unsigned int len;
+
+						len  = nla_len(tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_MAC]);
+						if (len > sizeof(phy->he_mac_capa))
+							len = sizeof(phy->he_mac_capa);
+						memcpy(phy->he_mac_capa, nla_data(tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_MAC]), len);
+					}
+
+					if (tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]) {
+						unsigned int len;
+
+						len = nla_len(tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]);
+
+						if (len > sizeof(phy->he_phy_capa) - 1)
+							len = sizeof(phy->he_phy_capa) - 1;
+						memcpy(&((__u8 *)phy->he_phy_capa)[1], nla_data(tb_he[NL80211_BAND_IFTYPE_ATTR_HE_CAP_PHY]), len);
+					}
+				}
+			}
+
 			if (tb_band[NL80211_BAND_ATTR_FREQS]) {
 			        struct nlattr *tb_freq[NL80211_FREQUENCY_ATTR_MAX + 1];
 				struct nlattr *nl_freq = NULL;
@@ -683,6 +737,7 @@ int dump_phy(struct ubus_context *ctx,
 		int temp = phy_get_temp(phy->name);
 		void *c;
 		int ch;
+		int i;
 
 		if (phy->band_2g)
 			blobmsg_add_string(&b, NULL, "2");
@@ -702,6 +757,20 @@ int dump_phy(struct ubus_context *ctx,
 			blobmsg_add_u32(&b, "ht_capa", phy->ht_capa);
 		if (phy->vht_capa)
 			blobmsg_add_u32(&b, "vht_capa", phy->vht_capa);
+		if (phy->he_mac_capa) {
+			void *c = blobmsg_open_array(&b, "he_mac_capa");
+
+			for (i = 0; i < 3; i++)
+				blobmsg_add_u16(&b, "he_mac_capa", phy->he_mac_capa[i]);
+			blobmsg_close_table(&b, c);
+		}
+		if (phy->he_phy_capa) {
+			void *c = blobmsg_open_array(&b, "he_phy_capa");
+
+			for (i = 0; i < 6; i++)
+				blobmsg_add_u16(&b, "he_phy_capa", phy->he_phy_capa[i]);
+			blobmsg_close_table(&b, c);
+		}
 
 		if (phy->tx_ant_avail)
 			blobmsg_add_u32(&b, "tx_ant", phy->tx_ant_avail);

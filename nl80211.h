@@ -35,6 +35,8 @@ struct wifi_phy {
 
 	uint16_t ht_capa;
 	uint32_t vht_capa;
+	uint16_t he_mac_capa[3];
+	uint16_t he_phy_capa[6];
 
 	unsigned char chandisabled[IEEE80211_CHAN_MAX];
 	unsigned char channel[IEEE80211_CHAN_MAX];
