@@ -755,22 +755,59 @@ int dump_phy(struct ubus_context *ctx,
 
 		if (phy->ht_capa)
 			blobmsg_add_u32(&b, "ht_capa", phy->ht_capa);
+
 		if (phy->vht_capa)
 			blobmsg_add_u32(&b, "vht_capa", phy->vht_capa);
 		if (phy->he_mac_capa) {
-			void *c = blobmsg_open_array(&b, "he_mac_capa");
+			c = blobmsg_open_array(&b, "he_mac_capa");
 
 			for (i = 0; i < 3; i++)
 				blobmsg_add_u16(&b, "he_mac_capa", phy->he_mac_capa[i]);
 			blobmsg_close_table(&b, c);
 		}
 		if (phy->he_phy_capa) {
-			void *c = blobmsg_open_array(&b, "he_phy_capa");
-
+			c = blobmsg_open_array(&b, "he_phy_capa");
 			for (i = 0; i < 6; i++)
 				blobmsg_add_u16(&b, "he_phy_capa", phy->he_phy_capa[i]);
 			blobmsg_close_table(&b, c);
 		}
+
+		c = blobmsg_open_array(&b, "htmode");
+		if (phy->ht_capa) {
+			blobmsg_add_string(&b, NULL, "HT20");
+			if (phy->ht_capa & 0x2)
+				blobmsg_add_string(&b, NULL, "HT40");
+		}
+		if (phy->vht_capa) {
+			int chwidth = (phy->vht_capa >> 2) & 0x3;
+
+			blobmsg_add_string(&b, NULL, "VHT20");
+			blobmsg_add_string(&b, NULL, "VHT40");
+			blobmsg_add_string(&b, NULL, "VHT80");
+			switch (chwidth) {
+			case 2:
+				blobmsg_add_string(&b, NULL, "VHT80+80");
+				/* fall through */
+			case 1:
+				blobmsg_add_string(&b, NULL, "VHT160");
+				break;
+			}
+		}
+		if (phy->he_phy_capa) {
+			int chwidth = (phy->he_phy_capa[0] >> 8) & 0xff;
+
+			blobmsg_add_string(&b, NULL, "HE20");
+			if (chwidth & 0x2 || chwidth & 0x2)
+				blobmsg_add_string(&b, NULL, "HE40");
+			if (chwidth & 0x4)
+				blobmsg_add_string(&b, NULL, "HE80");
+			if (chwidth & 0x8 || chwidth & 0x10)
+				blobmsg_add_string(&b, NULL, "HE160");
+			if (chwidth & 0x10)
+				blobmsg_add_string(&b, NULL, "HE80+80");
+		}
+		blobmsg_close_table(&b, c);
+
 
 		if (phy->tx_ant_avail)
 			blobmsg_add_u32(&b, "tx_ant", phy->tx_ant_avail);
