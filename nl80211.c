@@ -760,14 +760,14 @@ int dump_phy(struct ubus_context *ctx,
 
 		if (phy->vht_capa)
 			blobmsg_add_u32(&b, "vht_capa", phy->vht_capa);
-		if (phy->he_mac_capa) {
+		if (phy->he_mac_capa[0]) {
 			c = blobmsg_open_array(&b, "he_mac_capa");
 
 			for (i = 0; i < 3; i++)
 				blobmsg_add_u16(&b, "he_mac_capa", phy->he_mac_capa[i]);
 			blobmsg_close_table(&b, c);
 		}
-		if (phy->he_phy_capa) {
+		if (phy->he_phy_capa[0]) {
 			c = blobmsg_open_array(&b, "he_phy_capa");
 			for (i = 0; i < 6; i++)
 				blobmsg_add_u16(&b, "he_phy_capa", phy->he_phy_capa[i]);
@@ -795,7 +795,7 @@ int dump_phy(struct ubus_context *ctx,
 				break;
 			}
 		}
-		if (phy->he_phy_capa) {
+		if (phy->he_phy_capa[0]) {
 			int chwidth = (phy->he_phy_capa[0] >> 8) & 0xff;
 
 			blobmsg_add_string(&b, NULL, "HE20");
@@ -978,6 +978,7 @@ int radio_nl80211_init(void)
 	}
 
 	msg = unl_genl_msg(&unl, NL80211_CMD_GET_WIPHY, true);
+	nla_put_flag(msg, NL80211_ATTR_SPLIT_WIPHY_DUMP);
 	unl_genl_request(&unl, msg, nl80211_recv, NULL);
 	msg = unl_genl_msg(&unl, NL80211_CMD_GET_INTERFACE, true);
 	unl_genl_request(&unl, msg, nl80211_recv, NULL);
