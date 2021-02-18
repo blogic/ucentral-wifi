@@ -81,7 +81,7 @@ static void sysfs_find_path(struct wifi_phy *phy)
 	start += 8;
 	if (strstr(start, "pci/"))
 		start = strstr(start, "soc/");
-	if (strstr(start, "/pci"))
+	else if (strstr(start, "/pci"))
 		start += 9;
 	stop = strstr(start, "/ieee80211");
 	if (stop)
