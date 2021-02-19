@@ -693,6 +693,8 @@ static char *iftype_string[NUM_NL80211_IFTYPES] = {
 	[NL80211_IFTYPE_AP] = "ap",
 	[NL80211_IFTYPE_MONITOR] = "monitor",
 	[NL80211_IFTYPE_ADHOC] = "adhoc",
+	[NL80211_IFTYPE_MESH_POINT] = "mesh",
+	[NL80211_IFTYPE_AP_VLAN] = "ap/vlan",
 };
 
 static void blobmsg_add_iftype(struct blob_buf *bbuf, const char *name, const uint32_t iftype)
