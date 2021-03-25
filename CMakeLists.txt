@@ -16,8 +16,12 @@ SET(SOURCES main.c nl80211.c ubus.c)
 FIND_LIBRARY(ubus NAMES ubus)
 FIND_LIBRARY(ubox NAMES ubox)
 FIND_LIBRARY(nl-tiny NAMES nl-tiny)
+
+FIND_PATH(ubox_include_dir libubox/uloop.h)
 FIND_PATH(ubus_include_dir NAMES libubus.h)
-INCLUDE_DIRECTORIES(${ubox_include_dir} ${ubus_include_dir})
+FIND_PATH(libnl-tiny_include_dir netlink-generic.h PATH_SUFFIXES libnl-tiny)
+
+INCLUDE_DIRECTORIES(${ubox_include_dir} ${ubus_include_dir} ${libnl-tiny_include_dir})
 
 ADD_EXECUTABLE(ucentral-wifi ${SOURCES})
 
