@@ -8,6 +8,9 @@ static const struct ubus_method wifi_methods[] = {
 	UBUS_METHOD_NOARG("phy", dump_phy),
 	UBUS_METHOD_NOARG("iface", dump_iface),
 	UBUS_METHOD_NOARG("station", dump_station),
+	UBUS_METHOD_NOARG("survey", dump_survey),
+	UBUS_METHOD_NOARG("scan", trigger_scan),
+	UBUS_METHOD_NOARG("scan_dump", dump_scan),
 };
 
 static struct ubus_object_type ubus_object_type =

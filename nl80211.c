@@ -34,6 +34,8 @@
 #include "wifi.h"
 #include "nl80211.h"
 
+#define min(x,y) ((x) < (y) ? (x) : (y))
+
 static struct blob_buf b;
 static struct unl unl;
 static struct uloop_fd fd;
@@ -711,6 +713,21 @@ static int iface_is_up(char *iface)
 	return 0;
 }
 
+static void dump_band(struct wifi_phy *phy)
+{
+	void *a = blobmsg_open_array(&b, "band");
+
+	if (phy->band_2g)
+		blobmsg_add_string(&b, NULL, "2");
+	if (phy->band_5gl && phy->band_5gu)
+		blobmsg_add_string(&b, NULL, "5");
+	else if (phy->band_5gl)
+		blobmsg_add_string(&b, NULL, "5l");
+	else if (phy->band_5gu)
+		blobmsg_add_string(&b, NULL, "5u");
+	blobmsg_close_table(&b, a);
+}
+
 int dump_phy(struct ubus_context *ctx,
 	     struct ubus_object *obj,
 	     struct ubus_request_data *req,
@@ -722,21 +739,13 @@ int dump_phy(struct ubus_context *ctx,
 
 	avl_for_each_element(&phy_tree, phy, avl) {
 		void *p = blobmsg_open_table(&b, phy->path);
-		void *a = blobmsg_open_array(&b, "band");
 		int temp = phy_get_temp(phy->name);
 		void *c;
 		int ch;
 		int i;
 
-		if (phy->band_2g)
-			blobmsg_add_string(&b, NULL, "2");
-		if (phy->band_5gl && phy->band_5gu)
-			blobmsg_add_string(&b, NULL, "5");
-		else if (phy->band_5gl)
-			blobmsg_add_string(&b, NULL, "5l");
-		else if (phy->band_5gu)
-			blobmsg_add_string(&b, NULL, "5u");
-		blobmsg_close_table(&b, a);
+		dump_band(phy);
+
 		if (*phy->country)
 			blobmsg_add_string(&b, "country", phy->country);
 		if (phy->dfs_region)
@@ -951,6 +960,230 @@ int dump_station(struct ubus_context *ctx,
 				blobmsg_close_array(&b, w);
 		}
 	}
+	ubus_send_reply(ctx, req, b.head);
+	return UBUS_STATUS_OK;
+}
+
+static void
+print_mac(char *mac_addr, const unsigned char *arg)
+{
+	sprintf(mac_addr, "%02x:%02x:%02x:%02x:%02x:%02x",
+		arg[0], arg[1], arg[2], arg[3], arg[4], arg[5]);
+}
+
+static int
+nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
+{
+	static struct nla_policy bss_policy[NL80211_BSS_MAX + 1] = {
+		[NL80211_BSS_TSF]                  = { .type = NLA_U64 },
+		[NL80211_BSS_FREQUENCY]            = { .type = NLA_U32 },
+		[NL80211_BSS_BSSID]                = { 0 },
+		[NL80211_BSS_BEACON_INTERVAL]      = { .type = NLA_U16 },
+		[NL80211_BSS_CAPABILITY]           = { .type = NLA_U16 },
+		[NL80211_BSS_INFORMATION_ELEMENTS] = { 0 },
+		[NL80211_BSS_SIGNAL_MBM]           = { .type = NLA_U32 },
+		[NL80211_BSS_SIGNAL_UNSPEC]        = { .type = NLA_U8  },
+		[NL80211_BSS_STATUS]               = { .type = NLA_U32 },
+		[NL80211_BSS_SEEN_MS_AGO]          = { .type = NLA_U32 },
+		[NL80211_BSS_BEACON_IES]           = { 0 },
+	};
+
+	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
+	struct nlattr *bss[NL80211_BSS_MAX + 1] = {};
+	struct nlattr *tb[NL80211_ATTR_MAX + 1] = {};
+	char mac[18], ssid[33] = {};
+	void *c;
+
+	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
+
+	if (!tb[NL80211_ATTR_BSS] ||
+	    nla_parse_nested(bss, NL80211_BSS_MAX, tb[NL80211_ATTR_BSS], bss_policy) ||
+	    !bss[NL80211_BSS_BSSID])
+		return NL_OK;
+
+	print_mac(mac, nla_data(bss[NL80211_BSS_BSSID]));
+	c = blobmsg_open_table(&b, mac);
+
+	if (bss[NL80211_BSS_TSF])
+		blobmsg_add_u64(&b, "tsf", nla_get_u64(bss[NL80211_BSS_TSF]));
+	if (bss[NL80211_BSS_FREQUENCY])
+		blobmsg_add_u32(&b, "channel",
+			        ieee80211_frequency_to_channel((int)nla_get_u32(bss[NL80211_BSS_FREQUENCY])));
+	if (bss[NL80211_BSS_SIGNAL_MBM])
+		blobmsg_add_u32(&b, "signal", ((int) nla_get_u32(bss[NL80211_BSS_SIGNAL_MBM])) / 100);
+	if (bss[NL80211_BSS_SEEN_MS_AGO])
+		blobmsg_add_u32(&b, "lastseen", nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]));
+	if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
+		int ielen = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
+		unsigned char *ie = nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
+		int len;
+
+		while (ielen >= 2 && ielen >= ie[1]) {
+			switch (ie[0]) {
+			case 0: /* SSID */
+			case 114: /* Mesh ID */
+				len = min(ie[1], 32 + 1);
+				memcpy(ssid, ie + 2, len);
+				ssid[len] = 0;
+				if (len)
+					blobmsg_add_string(&b, "ssid", ssid);
+				break;
+			}
+
+			ielen -= ie[1] + 2;
+			ie += ie[1] + 2;
+		}
+	}
+	blobmsg_close_table(&b, c);
+	return NL_OK;
+}
+
+static int
+nl80211_survey_recv(struct nl_msg *msg, void *arg)
+{
+	static struct nla_policy sp[NL80211_SURVEY_INFO_MAX + 1] = {
+		[NL80211_SURVEY_INFO_FREQUENCY]         = { .type = NLA_U32 },
+		[NL80211_SURVEY_INFO_TIME]              = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_TIME_TX]           = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_TIME_RX]           = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_TIME_BUSY]         = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_TIME_EXT_BUSY]     = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_TIME_SCAN]         = { .type = NLA_U64 },
+		[NL80211_SURVEY_INFO_NOISE]             = { .type = NLA_U8 },
+	};
+
+	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
+	struct nlattr *si[NL80211_SURVEY_INFO_MAX + 1] = {};
+	struct nlattr *tb[NL80211_ATTR_MAX + 1] = {};
+	void *c;
+
+	memset(tb, 0, sizeof(tb));
+	memset(si, 0, sizeof(si));
+
+	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0),
+		  genlmsg_attrlen(gnlh, 0), NULL);
+
+	if (!tb[NL80211_ATTR_SURVEY_INFO])
+		return NL_OK;
+
+	if (nla_parse_nested(si, NL80211_SURVEY_INFO_MAX,
+			     tb[NL80211_ATTR_SURVEY_INFO], sp)) {
+		return NL_SKIP;
+	}
+
+	c = blobmsg_open_table(&b, NULL);
+
+	if (si[NL80211_SURVEY_INFO_FREQUENCY])
+		blobmsg_add_u32(&b, "channel",
+			ieee80211_frequency_to_channel(nla_get_u32(si[NL80211_SURVEY_INFO_FREQUENCY])));
+
+	if (si[NL80211_SURVEY_INFO_TIME_TX])
+		blobmsg_add_u64(&b, "tx", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_TX]));
+
+	if (si[NL80211_SURVEY_INFO_TIME_RX])
+		blobmsg_add_u64(&b, "rx", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_RX]));
+
+	if (si[NL80211_SURVEY_INFO_TIME_BUSY])
+		blobmsg_add_u64(&b, "busy", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_BUSY]));
+
+	if (si[NL80211_SURVEY_INFO_TIME_EXT_BUSY])
+		blobmsg_add_u64(&b, "busy_ext", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_EXT_BUSY]));
+
+	if (si[NL80211_SURVEY_INFO_TIME])
+		blobmsg_add_u64(&b, "duration_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME]));
+
+	if (si[NL80211_SURVEY_INFO_NOISE])
+		blobmsg_add_u32(&b, "noise", nla_get_u8(si[NL80211_SURVEY_INFO_NOISE]));
+
+	blobmsg_add_u8(&b, "in_use", si[NL80211_SURVEY_INFO_IN_USE] ? 1 : 0);
+	blobmsg_close_table(&b, c);
+
+	return NL_OK;
+}
+
+int trigger_scan(struct ubus_context *ctx,
+		 struct ubus_object *obj,
+		 struct ubus_request_data *req,
+		 const char *method, struct blob_attr *_msg)
+{
+	struct wifi_phy *phy;
+	struct nl_msg *msg;
+
+	avl_for_each_element(&phy_tree, phy, avl) {
+		struct wifi_iface *wif;
+
+		if (list_empty(&phy->wifs))
+			continue;
+
+		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+		msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
+		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+		nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
+		unl_genl_request(&unl, msg, NULL, NULL);
+	}
+	return UBUS_STATUS_OK;
+}
+
+int dump_scan(struct ubus_context *ctx,
+	      struct ubus_object *obj,
+	      struct ubus_request_data *req,
+	      const char *method, struct blob_attr *_msg)
+{
+	struct wifi_phy *phy;
+	struct nl_msg *msg;
+	void *c;
+
+	blob_buf_init(&b, 0);
+	c = blobmsg_open_array(&b, "scan");
+	avl_for_each_element(&phy_tree, phy, avl) {
+		struct wifi_iface *wif;
+		void *t, *s;
+
+		if (list_empty(&phy->wifs))
+			continue;
+
+		t = blobmsg_open_table(&b, NULL);
+		dump_band(phy);
+		s = blobmsg_open_table(&b, "channels");
+		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SCAN, true);
+		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+		unl_genl_request(&unl, msg, nl80211_scan_dump_recv, NULL);
+		blobmsg_close_table(&b, s);
+		blobmsg_close_table(&b, t);
+	}
+	blobmsg_close_array(&b, c);
+	ubus_send_reply(ctx, req, b.head);
+	return UBUS_STATUS_OK;
+}
+
+int dump_survey(struct ubus_context *ctx,
+		struct ubus_object *obj,
+		struct ubus_request_data *req,
+		const char *method, struct blob_attr *_msg)
+{
+	struct wifi_phy *phy;
+	struct nl_msg *msg;
+	void *c;
+
+	blob_buf_init(&b, 0);
+	c = blobmsg_open_array(&b, "survey");
+	avl_for_each_element(&phy_tree, phy, avl) {
+		struct wifi_iface *wif;
+		void *t;
+
+		if (list_empty(&phy->wifs))
+			continue;
+
+		t = blobmsg_open_table(&b, NULL);
+		dump_band(phy);
+		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SURVEY, true);
+		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+		unl_genl_request(&unl, msg, nl80211_survey_recv, NULL);
+		blobmsg_close_table(&b, t);
+	}
+	blobmsg_close_array(&b, c);
 	ubus_send_reply(ctx, req, b.head);
 	return UBUS_STATUS_OK;
 }

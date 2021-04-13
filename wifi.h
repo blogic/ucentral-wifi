@@ -22,3 +22,15 @@ int dump_station(struct ubus_context *ctx,
 		 struct ubus_object *obj,
 		 struct ubus_request_data *req,
 		 const char *method, struct blob_attr *msg);
+int dump_survey(struct ubus_context *ctx,
+		struct ubus_object *obj,
+		struct ubus_request_data *req,
+		const char *method, struct blob_attr *msg);
+int dump_scan(struct ubus_context *ctx,
+	      struct ubus_object *obj,
+	      struct ubus_request_data *req,
+	      const char *method, struct blob_attr *msg);
+int trigger_scan(struct ubus_context *ctx,
+		 struct ubus_object *obj,
+		 struct ubus_request_data *req,
+		 const char *method, struct blob_attr *msg);
