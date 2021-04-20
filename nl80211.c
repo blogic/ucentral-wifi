@@ -14,7 +14,7 @@
 
 #include <linux/if_ether.h>
 #include <linux/sockios.h>
-#include <linux/nl80211.h>
+#include <mac80211/uapi/linux/nl80211.h>
 
 #include <netlink/msg.h>
 #include <netlink/attr.h>
