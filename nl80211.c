@@ -992,6 +992,7 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 	struct nlattr *bss[NL80211_BSS_MAX + 1] = {};
 	struct nlattr *tb[NL80211_ATTR_MAX + 1] = {};
 	char mac[18], ssid[33] = {};
+	bool verbose = (bool) arg;
 	void *c;
 
 	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
@@ -1004,14 +1005,14 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 	print_mac(mac, nla_data(bss[NL80211_BSS_BSSID]));
 	c = blobmsg_open_table(&b, mac);
 
-	if (bss[NL80211_BSS_TSF])
+	if (verbose && bss[NL80211_BSS_TSF])
 		blobmsg_add_u64(&b, "tsf", nla_get_u64(bss[NL80211_BSS_TSF]));
 	if (bss[NL80211_BSS_FREQUENCY])
 		blobmsg_add_u32(&b, "channel",
 			        ieee80211_frequency_to_channel((int)nla_get_u32(bss[NL80211_BSS_FREQUENCY])));
 	if (bss[NL80211_BSS_SIGNAL_MBM])
 		blobmsg_add_u32(&b, "signal", ((int) nla_get_u32(bss[NL80211_BSS_SIGNAL_MBM])) / 100);
-	if (bss[NL80211_BSS_SEEN_MS_AGO])
+	if (verbose && bss[NL80211_BSS_SEEN_MS_AGO])
 		blobmsg_add_u32(&b, "lastseen", nla_get_u32(bss[NL80211_BSS_SEEN_MS_AGO]));
 	if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
 		int ielen = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
@@ -1106,20 +1107,43 @@ int trigger_scan(struct ubus_context *ctx,
 		 struct ubus_request_data *req,
 		 const char *method, struct blob_attr *_msg)
 {
+	enum {
+		SCAN_BAND,
+		SCAN_CHANNELS,
+		__SCAN_MAX,
+	};
+
+	static const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
+		[SCAN_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
+		[SCAN_CHANNELS] = { .name = "channels", .type = BLOBMSG_TYPE_ARRAY },
+	};
+
+	struct blob_attr *tb[__SCAN_MAX] = {};
 	struct wifi_phy *phy;
 	struct nl_msg *msg;
+	char *band = NULL;
+
+	blobmsg_parse(scan_policy, __SCAN_MAX, tb, blob_data(_msg), blob_len(_msg));
+
+	if (tb[SCAN_BAND])
+		band = blobmsg_get_string(tb[SCAN_BAND]);
 
 	avl_for_each_element(&phy_tree, phy, avl) {
 		struct wifi_iface *wif;
 
 		if (list_empty(&phy->wifs))
 			continue;
-
-		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
-		msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
-		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
-		nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
-		unl_genl_request(&unl, msg, NULL, NULL);
+		if (!band ||
+		    (!strcmp(band, "2") && phy->band_2g) ||
+		    (!strcmp(band, "5l") && phy->band_5gl) ||
+		    (!strcmp(band, "5u") && phy->band_5gu) ||
+		    (!strcmp(band, "5") && (phy->band_5gl || phy->band_5gu))) {
+			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+			msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
+			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+			nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
+			unl_genl_request(&unl, msg, NULL, NULL);
+		}
 	}
 	return UBUS_STATUS_OK;
 }
@@ -1129,28 +1153,38 @@ int dump_scan(struct ubus_context *ctx,
 	      struct ubus_request_data *req,
 	      const char *method, struct blob_attr *_msg)
 {
+	enum {
+		SCAN_VERBOSE,
+		__SCAN_MAX,
+	};
+
+	static const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
+		[SCAN_VERBOSE] = { .name = "verbose", .type = BLOBMSG_TYPE_BOOL },
+	};
+
+	struct blob_attr *tb[__SCAN_MAX] = {};
 	struct wifi_phy *phy;
+	bool verbose = false;
 	struct nl_msg *msg;
 	void *c;
+
+	blobmsg_parse(scan_policy, __SCAN_MAX, tb, blob_data(_msg), blob_len(_msg));
+
+	if (tb[SCAN_VERBOSE])
+		verbose = blobmsg_get_bool(tb[SCAN_VERBOSE]);
 
 	blob_buf_init(&b, 0);
 	c = blobmsg_open_array(&b, "scan");
 	avl_for_each_element(&phy_tree, phy, avl) {
 		struct wifi_iface *wif;
-		void *t, *s;
 
 		if (list_empty(&phy->wifs))
 			continue;
 
-		t = blobmsg_open_table(&b, NULL);
-		dump_band(phy);
-		s = blobmsg_open_table(&b, "channels");
 		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
 		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SCAN, true);
 		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
-		unl_genl_request(&unl, msg, nl80211_scan_dump_recv, NULL);
-		blobmsg_close_table(&b, s);
-		blobmsg_close_table(&b, t);
+		unl_genl_request(&unl, msg, nl80211_scan_dump_recv, (void *) verbose);
 	}
 	blobmsg_close_array(&b, c);
 	ubus_send_reply(ctx, req, b.head);
