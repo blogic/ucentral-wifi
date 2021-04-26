@@ -869,7 +869,7 @@ int dump_iface(struct ubus_context *ctx,
 			blobmsg_add_chwidth(&b, "ch_width", wif->width);
 			if (wif->tx_power)
 				blobmsg_add_u32(&b, "tx_power", wif->tx_power);
-			blobmsg_add_string(&b, "mac", wif->saddr);
+			blobmsg_add_string(&b, "bssid", wif->saddr);
 
 			if (wif->noise) {
 				snprintf(buf, sizeof(buf), "%d", wif->noise);
@@ -933,7 +933,7 @@ int dump_station(struct ubus_context *ctx,
 					w = blobmsg_open_array(&b, wif->name);
 
 				s = blobmsg_open_table(&b, NULL);
-				blobmsg_add_string(&b, "mac", sta->saddr);
+				blobmsg_add_string(&b, "bssid", sta->saddr);
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)
