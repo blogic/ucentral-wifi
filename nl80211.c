@@ -14,7 +14,11 @@
 
 #include <linux/if_ether.h>
 #include <linux/sockios.h>
+#ifdef OPENWRT_BUILD
 #include <mac80211/uapi/linux/nl80211.h>
+#else
+#include <linux/nl80211.h>
+#endif
 
 #include <netlink/msg.h>
 #include <netlink/attr.h>

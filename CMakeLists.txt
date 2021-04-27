@@ -11,6 +11,10 @@ ADD_DEFINITIONS(-Os -std=gnu99 -g3 -Wmissing-declarations -Wno-unused-parameter)
 
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 
+if(OPENWRT_BUILD)
+    add_definitions(-DOPENWRT_BUILD)
+endif()
+
 SET(SOURCES main.c nl80211.c ubus.c)
 
 FIND_LIBRARY(ubus NAMES ubus)
