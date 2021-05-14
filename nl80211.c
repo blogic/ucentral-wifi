@@ -722,13 +722,9 @@ static void dump_band(struct wifi_phy *phy)
 	void *a = blobmsg_open_array(&b, "band");
 
 	if (phy->band_2g)
-		blobmsg_add_string(&b, NULL, "2");
-	if (phy->band_5gl && phy->band_5gu)
-		blobmsg_add_string(&b, NULL, "5");
-	else if (phy->band_5gl)
-		blobmsg_add_string(&b, NULL, "5l");
-	else if (phy->band_5gu)
-		blobmsg_add_string(&b, NULL, "5u");
+		blobmsg_add_string(&b, NULL, "2G");
+	if (phy->band_5gl || phy->band_5gu)
+		blobmsg_add_string(&b, NULL, "5G");
 	blobmsg_close_table(&b, a);
 }
 
@@ -1138,10 +1134,10 @@ int trigger_scan(struct ubus_context *ctx,
 		if (list_empty(&phy->wifs))
 			continue;
 		if (!band ||
-		    (!strcmp(band, "2") && phy->band_2g) ||
-		    (!strcmp(band, "5l") && phy->band_5gl) ||
-		    (!strcmp(band, "5u") && phy->band_5gu) ||
-		    (!strcmp(band, "5") && (phy->band_5gl || phy->band_5gu))) {
+		    (!strcmp(band, "2G") && phy->band_2g) ||
+		    (!strcmp(band, "5G") && phy->band_5gl) ||
+		    (!strcmp(band, "5G") && phy->band_5gu) ||
+		    (!strcmp(band, "5G") && (phy->band_5gl || phy->band_5gu))) {
 			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
 			msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
 			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
