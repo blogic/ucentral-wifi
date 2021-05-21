@@ -70,14 +70,14 @@ struct wifi_station {
 	struct list_head iface;
 
 	int8_t rssi;
-	uint32_t rx_packets;
-	uint32_t tx_packets;
-	uint32_t rx_bytes;
-	uint32_t tx_bytes;
-	uint32_t tx_retries;
-	uint32_t tx_failed;
-	uint32_t tx_offset;
-	uint32_t inactive;
+	uint32_t rx_packets[2];
+	uint32_t tx_packets[2];
+	uint32_t rx_bytes[2];
+	uint32_t tx_bytes[2];
+	uint32_t tx_retries[2];
+	uint32_t tx_failed[2];
+	uint32_t tx_offset[2];
+	uint32_t inactive[2];
 
 	struct sta_rate rx_rate, tx_rate;
 };

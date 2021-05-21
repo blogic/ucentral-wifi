@@ -190,21 +190,21 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 	if (sinfo[NL80211_STA_INFO_SIGNAL_AVG])
 		sta->rssi = (int32_t) nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL_AVG]);
 	if (sinfo[NL80211_STA_INFO_RX_PACKETS])
-		sta->rx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]);
+		sta->rx_packets[0] = nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]);
 	if (sinfo[NL80211_STA_INFO_TX_PACKETS])
-		sta->tx_packets = nla_get_u32(sinfo[NL80211_STA_INFO_TX_PACKETS]);
+		sta->tx_packets[0] = nla_get_u32(sinfo[NL80211_STA_INFO_TX_PACKETS]);
 	if (sinfo[NL80211_STA_INFO_RX_BYTES])
-		sta->rx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_RX_BYTES]);
+		sta->rx_bytes[0] = nla_get_u32(sinfo[NL80211_STA_INFO_RX_BYTES]);
 	if (sinfo[NL80211_STA_INFO_TX_BYTES])
-		sta->tx_bytes = nla_get_u32(sinfo[NL80211_STA_INFO_TX_BYTES]);
+		sta->tx_bytes[0] = nla_get_u32(sinfo[NL80211_STA_INFO_TX_BYTES]);
 	if (sinfo[NL80211_STA_INFO_TX_RETRIES])
-		sta->tx_retries = nla_get_u32(sinfo[NL80211_STA_INFO_TX_RETRIES]);
+		sta->tx_retries[0] = nla_get_u32(sinfo[NL80211_STA_INFO_TX_RETRIES]);
 	if (sinfo[NL80211_STA_INFO_TX_FAILED])
-		sta->tx_failed = nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]);
+		sta->tx_failed[0] = nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]);
 	if (sinfo[NL80211_STA_INFO_T_OFFSET])
-		sta->tx_offset = nla_get_u32(sinfo[NL80211_STA_INFO_T_OFFSET]);
+		sta->tx_offset[0] = nla_get_u32(sinfo[NL80211_STA_INFO_T_OFFSET]);
 	if (sinfo[NL80211_STA_INFO_INACTIVE_TIME])
-		sta->inactive = nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]);
+		sta->inactive[0] = nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]);
 	if (sinfo[NL80211_STA_INFO_RX_BITRATE] &&
 	    !nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX, sinfo[NL80211_STA_INFO_RX_BITRATE],
 			      rate_policy))
@@ -907,6 +907,20 @@ static void dump_rate(char *name, struct sta_rate *rate)
 	blobmsg_close_table(&b, r);
 }
 
+static int get_counter_delta(uint32_t *counter)
+{
+	uint32_t delta;
+
+	if (counter[0] < counter[1])
+		delta = UINT32_MAX - counter[1] + counter[0];
+	else
+		delta = counter[0] - counter[1];
+
+	counter[1] = counter[0];
+
+	return delta;
+}
+
 int dump_station(struct ubus_context *ctx,
 		 struct ubus_object *obj,
 		 struct ubus_request_data *req,
@@ -937,21 +951,21 @@ int dump_station(struct ubus_context *ctx,
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)
-					blobmsg_add_u32(&b, "rx_packets", sta->rx_packets);
+					blobmsg_add_u32(&b, "rx_packets", get_counter_delta(sta->rx_packets));
 				if (sta->tx_packets)
-					blobmsg_add_u32(&b, "tx_packets", sta->tx_packets);
+					blobmsg_add_u32(&b, "tx_packets", get_counter_delta(sta->tx_packets));
 				if (sta->rx_bytes)
-					blobmsg_add_u32(&b, "rx_bytes", sta->rx_bytes);
+					blobmsg_add_u32(&b, "rx_bytes", get_counter_delta(sta->rx_bytes));
 				if (sta->tx_bytes)
-					blobmsg_add_u32(&b, "tx_bytes", sta->tx_bytes);
+					blobmsg_add_u32(&b, "tx_bytes", get_counter_delta(sta->tx_bytes));
 				if (sta->tx_retries)
-					blobmsg_add_u32(&b, "tx_retries", sta->tx_retries);
+					blobmsg_add_u32(&b, "tx_retries", get_counter_delta(sta->tx_retries));
 				if (sta->tx_failed)
-					blobmsg_add_u32(&b, "tx_failed", sta->tx_failed);
+					blobmsg_add_u32(&b, "tx_failed", get_counter_delta(sta->tx_failed));
 				if (sta->tx_offset)
-					blobmsg_add_u32(&b, "tx_offset", sta->tx_offset);
+					blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
 				if (sta->tx_offset)
-					blobmsg_add_u32(&b, "tx_offset", sta->tx_offset);
+					blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
 				dump_rate("rx_rate", &sta->rx_rate);
 				dump_rate("tx_rate", &sta->tx_rate);
 				blobmsg_close_table(&b, s);
