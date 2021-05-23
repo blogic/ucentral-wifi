@@ -857,13 +857,13 @@ int dump_iface(struct ubus_context *ctx,
 			if (*wif->ssid)
 				blobmsg_add_string(&b, "ssid", wif->ssid);
 			blobmsg_add_iftype(&b, "mode", wif->type);
-			f = blobmsg_open_array(&b, "frequency");
+			f = blobmsg_open_array(&b, "channel");
 			if (wif->freq)
-				blobmsg_add_u32(&b, NULL, wif->freq);
+				blobmsg_add_u32(&b, NULL, ieee80211_frequency_to_channel(wif->freq));
 			if (wif->freq1)
-				blobmsg_add_u32(&b, NULL, wif->freq1);
+				blobmsg_add_u32(&b, NULL, ieee80211_frequency_to_channel(wif->freq1));
 			if (wif->freq2)
-				blobmsg_add_u32(&b, NULL, wif->freq2);
+				blobmsg_add_u32(&b, NULL, ieee80211_frequency_to_channel(wif->freq2));
 			blobmsg_close_array(&b, f);
 
 			blobmsg_add_chwidth(&b, "ch_width", wif->width);
@@ -1070,6 +1070,7 @@ nl80211_survey_recv(struct nl_msg *msg, void *arg)
 	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *si[NL80211_SURVEY_INFO_MAX + 1] = {};
 	struct nlattr *tb[NL80211_ATTR_MAX + 1] = {};
+	int *filter = arg, channel = 0;
 	void *c;
 
 	memset(tb, 0, sizeof(tb));
@@ -1086,32 +1087,39 @@ nl80211_survey_recv(struct nl_msg *msg, void *arg)
 		return NL_SKIP;
 	}
 
-	c = blobmsg_open_table(&b, NULL);
-
 	if (si[NL80211_SURVEY_INFO_FREQUENCY])
-		blobmsg_add_u32(&b, "channel",
-			ieee80211_frequency_to_channel(nla_get_u32(si[NL80211_SURVEY_INFO_FREQUENCY])));
+		channel = ieee80211_frequency_to_channel(nla_get_u32(si[NL80211_SURVEY_INFO_FREQUENCY]));
+
+	if (*filter && (channel != *filter))
+		return NL_OK;
+
+	if (!*filter)
+		c = blobmsg_open_table(&b, NULL);
+
+	blobmsg_add_u32(&b, "channel",
+		ieee80211_frequency_to_channel(nla_get_u32(si[NL80211_SURVEY_INFO_FREQUENCY])));
 
 	if (si[NL80211_SURVEY_INFO_TIME_TX])
-		blobmsg_add_u64(&b, "tx", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_TX]));
+		blobmsg_add_u64(&b, "transmit_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_TX]));
 
 	if (si[NL80211_SURVEY_INFO_TIME_RX])
-		blobmsg_add_u64(&b, "rx", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_RX]));
+		blobmsg_add_u64(&b, "receive_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_RX]));
 
 	if (si[NL80211_SURVEY_INFO_TIME_BUSY])
-		blobmsg_add_u64(&b, "busy", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_BUSY]));
+		blobmsg_add_u64(&b, "busy_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_BUSY]));
 
 	if (si[NL80211_SURVEY_INFO_TIME_EXT_BUSY])
 		blobmsg_add_u64(&b, "busy_ext", nla_get_u64(si[NL80211_SURVEY_INFO_TIME_EXT_BUSY]));
 
 	if (si[NL80211_SURVEY_INFO_TIME])
-		blobmsg_add_u64(&b, "duration_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME]));
+		blobmsg_add_u64(&b, "active_ms", nla_get_u64(si[NL80211_SURVEY_INFO_TIME]));
 
 	if (si[NL80211_SURVEY_INFO_NOISE])
-		blobmsg_add_u32(&b, "noise", nla_get_u8(si[NL80211_SURVEY_INFO_NOISE]));
+		blobmsg_add_u32(&b, "noise", (int8_t)nla_get_u8(si[NL80211_SURVEY_INFO_NOISE]));
 
 	blobmsg_add_u8(&b, "in_use", si[NL80211_SURVEY_INFO_IN_USE] ? 1 : 0);
-	blobmsg_close_table(&b, c);
+	if (!*filter)
+		blobmsg_close_table(&b, c);
 
 	return NL_OK;
 }
@@ -1205,33 +1213,46 @@ int dump_scan(struct ubus_context *ctx,
 	return UBUS_STATUS_OK;
 }
 
+enum {
+	SURVEY_CHANNEL,
+	__SURVEY_MAX,
+};
+
+static const struct blobmsg_policy survey_policy[__SURVEY_MAX] = {
+	[SURVEY_CHANNEL] = { .name = "channel", .type = BLOBMSG_TYPE_INT32 },
+};
+
 int dump_survey(struct ubus_context *ctx,
 		struct ubus_object *obj,
 		struct ubus_request_data *req,
 		const char *method, struct blob_attr *_msg)
 {
+	struct blob_attr *tb[__SURVEY_MAX] = {};
 	struct wifi_phy *phy;
 	struct nl_msg *msg;
+	int channel = 0;
 	void *c;
 
+	blobmsg_parse(survey_policy, __SURVEY_MAX, tb, blobmsg_data(_msg), blobmsg_data_len(_msg));
+	if (tb[SURVEY_CHANNEL])
+		channel = blobmsg_get_u32(tb[SURVEY_CHANNEL]);
+
 	blob_buf_init(&b, 0);
-	c = blobmsg_open_array(&b, "survey");
+	if (!channel)
+		c = blobmsg_open_array(&b, "survey");
 	avl_for_each_element(&phy_tree, phy, avl) {
 		struct wifi_iface *wif;
-		void *t;
 
 		if (list_empty(&phy->wifs))
 			continue;
 
-		t = blobmsg_open_table(&b, NULL);
-		dump_band(phy);
 		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
 		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SURVEY, true);
 		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
-		unl_genl_request(&unl, msg, nl80211_survey_recv, NULL);
-		blobmsg_close_table(&b, t);
+		unl_genl_request(&unl, msg, nl80211_survey_recv, &channel);
 	}
-	blobmsg_close_array(&b, c);
+	if (!channel)
+		blobmsg_close_array(&b, c);
 	ubus_send_reply(ctx, req, b.head);
 	return UBUS_STATUS_OK;
 }
