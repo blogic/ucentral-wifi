@@ -33,7 +33,7 @@ struct wifi_phy {
 	uint32_t dfs_region;
 
 	int tx_ant, rx_ant, tx_ant_avail, rx_ant_avail;
-	int band_2g, band_5gl, band_5gu;
+	int band_2g, band_5gl, band_5gu, band_6g;
 };
 
 struct wifi_iface {

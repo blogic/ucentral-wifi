@@ -109,8 +109,12 @@ static int ieee80211_frequency_to_channel(int freq)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;
-	else if (freq <= 45000) /* DMG band lower limit */
+	else if (freq < 5935) /* DMG band lower limit */
 		return (freq - 5000) / 5;
+	else if (freq == 5935)
+		return 2;
+	else if (freq >= 5955 && freq <= 7115)
+		return (freq - 5955) / 5;
 	else if (freq >= 58320 && freq <= 64800)
 		return (freq - 56160) / 2160;
 	else
@@ -474,7 +478,7 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 					freq = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_FREQ]);
 					chan = ieee80211_frequency_to_channel(freq);
 					if (chan >= IEEE80211_CHAN_MAX) {
-						ULOG_ERR("%s: found invalid channel %d", phy->name, chan);
+						ULOG_ERR("%s: found invalid channel %d\n", phy->name, chan);
 						continue;
 					}
 
@@ -488,11 +492,16 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 					if (tb_freq[NL80211_FREQUENCY_ATTR_MAX_TX_POWER] &&
 					    !tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
 						phy->chanpwr[chan] = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_MAX_TX_POWER]) / 10;
-					if (chan <= 16)
+					if (freq >= 6000) {
+						phy->band_2g = 0;
+						phy->band_5gl = 0;
+						phy->band_5gu = 0;
+						phy->band_6g = 1;
+					} else if (chan <= 16)
 						phy->band_2g = 1;
 					else if (chan >= 32 && chan <= 68)
 						phy->band_5gl = 1;
-					else if (chan >= 96)
+					else if (chan >= 96 && chan <= 173)
 						phy->band_5gu = 1;
 				}
 			}
@@ -725,6 +734,8 @@ static void dump_band(struct wifi_phy *phy)
 		blobmsg_add_string(&b, NULL, "2G");
 	if (phy->band_5gl || phy->band_5gu)
 		blobmsg_add_string(&b, NULL, "5G");
+	if (phy->band_6g)
+		blobmsg_add_string(&b, NULL, "6G");
 	blobmsg_close_table(&b, a);
 }
 
@@ -795,7 +806,7 @@ int dump_phy(struct ubus_context *ctx,
 			int chwidth = (phy->he_phy_capa[0] >> 8) & 0xff;
 
 			blobmsg_add_string(&b, NULL, "HE20");
-			if (chwidth & 0x2 || chwidth & 0x2)
+			if (chwidth & 0x2 || chwidth & 0x4)
 				blobmsg_add_string(&b, NULL, "HE40");
 			if (chwidth & 0x4)
 				blobmsg_add_string(&b, NULL, "HE80");
