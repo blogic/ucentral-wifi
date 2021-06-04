@@ -691,19 +691,8 @@ static int phy_get_temp(char *phy)
 static char *iftype_string[NUM_NL80211_IFTYPES] = {
 	[NL80211_IFTYPE_STATION] = "station",
 	[NL80211_IFTYPE_AP] = "ap",
-	[NL80211_IFTYPE_MONITOR] = "monitor",
-	[NL80211_IFTYPE_ADHOC] = "adhoc",
 	[NL80211_IFTYPE_MESH_POINT] = "mesh",
-	[NL80211_IFTYPE_AP_VLAN] = "ap/vlan",
 };
-
-static void blobmsg_add_iftype(struct blob_buf *bbuf, const char *name, const uint32_t iftype)
-{
-	if (iftype_string[iftype])
-		blobmsg_add_string(&b, name, iftype_string[iftype]);
-	else
-		blobmsg_add_u32(&b, name, iftype);
-}
 
 static int iface_is_up(char *iface)
 {
@@ -859,15 +848,21 @@ int dump_iface(struct ubus_context *ctx,
 			static char buf[10];
 			void *w, *f;
 
-			if (!wif->name || !*wif->name || !wif->type || !iface_is_up(wif->name))
+			if (!wif->name || !*wif->name || !wif->type)
 				continue;
+			if (!iftype_string[wif->type])
+				continue;
+
+			if (!iface_is_up(wif->name))
+				continue;
+
 			if (p)
 				p = blobmsg_open_table(&b, phy->path);
 			w = blobmsg_open_table(&b, wif->name);
 
 			if (*wif->ssid)
 				blobmsg_add_string(&b, "ssid", wif->ssid);
-			blobmsg_add_iftype(&b, "mode", wif->type);
+			blobmsg_add_string(&b, "mode", iftype_string[wif->type]);
 			f = blobmsg_open_array(&b, "channel");
 			if (wif->freq)
 				blobmsg_add_u32(&b, NULL, ieee80211_frequency_to_channel(wif->freq));
