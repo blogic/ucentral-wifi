@@ -1138,31 +1138,30 @@ nl80211_survey_recv(struct nl_msg *msg, void *arg)
 	return NL_OK;
 }
 
+const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
+	[SCAN_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
+	[SCAN_CHANNELS] = { .name = "channels", .type = BLOBMSG_TYPE_ARRAY },
+	[SCAN_PASSIVE] = { .name = "passive", .type = BLOBMSG_TYPE_BOOL },
+};
+
 int trigger_scan(struct ubus_context *ctx,
 		 struct ubus_object *obj,
 		 struct ubus_request_data *req,
 		 const char *method, struct blob_attr *_msg)
 {
-	enum {
-		SCAN_BAND,
-		SCAN_CHANNELS,
-		__SCAN_MAX,
-	};
-
-	static const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
-		[SCAN_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
-		[SCAN_CHANNELS] = { .name = "channels", .type = BLOBMSG_TYPE_ARRAY },
-	};
-
 	struct blob_attr *tb[__SCAN_MAX] = {};
 	struct wifi_phy *phy;
 	struct nl_msg *msg;
 	char *band = NULL;
+	bool passive = false;
 
 	blobmsg_parse(scan_policy, __SCAN_MAX, tb, blob_data(_msg), blob_len(_msg));
 
 	if (tb[SCAN_BAND])
 		band = blobmsg_get_string(tb[SCAN_BAND]);
+
+	if (tb[SCAN_PASSIVE] && blobmsg_get_u8(tb[SCAN_PASSIVE]))
+		passive = true;
 
 	avl_for_each_element(&phy_tree, phy, avl) {
 		struct wifi_iface *wif;
@@ -1174,10 +1173,18 @@ int trigger_scan(struct ubus_context *ctx,
 		    (!strcmp(band, "5G") && phy->band_5gl) ||
 		    (!strcmp(band, "5G") && phy->band_5gu) ||
 		    (!strcmp(band, "5G") && (phy->band_5gl || phy->band_5gu))) {
+
 			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
 			msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
 			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
 			nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
+			if (!passive) {
+				struct nl_msg *ssids;
+
+				ssids = nlmsg_alloc();
+				nla_put(ssids, 1, 0, "");
+				nla_put_nested(msg, NL80211_ATTR_SCAN_SSIDS, ssids);
+			}
 			unl_genl_request(&unl, msg, NULL, NULL);
 		}
 	}

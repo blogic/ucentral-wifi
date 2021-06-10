@@ -8,6 +8,15 @@
 
 #include <libubus.h>
 
+enum {
+	SCAN_BAND,
+	SCAN_CHANNELS,
+	SCAN_PASSIVE,
+	__SCAN_MAX,
+};
+
+extern const struct blobmsg_policy scan_policy[__SCAN_MAX];
+
 void ubus_init(void);
 
 int dump_phy(struct ubus_context *ctx,
