@@ -741,7 +741,7 @@ int dump_phy(struct ubus_context *ctx,
 		void *p = blobmsg_open_table(&b, phy->path);
 		int temp = phy_get_temp(phy->name);
 		void *c;
-		int ch;
+		int ch, freq;
 		int i;
 
 		dump_band(phy);
@@ -818,6 +818,14 @@ int dump_phy(struct ubus_context *ctx,
 		for (ch = 0; ch < IEEE80211_CHAN_MAX; ch++) {
 			if (phy->channel[ch])
 				blobmsg_add_u16(&b, NULL, ch);
+		}
+
+		blobmsg_close_array(&b, c);
+
+		c = blobmsg_open_array(&b, "frequencies");
+		for (freq = 0; freq < IEEE80211_CHAN_MAX; freq++) {
+			if (phy->freq[freq])
+				blobmsg_add_u16(&b, NULL, phy->freq[freq]);
 		}
 		blobmsg_close_array(&b, c);
 
