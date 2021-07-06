@@ -1198,20 +1198,26 @@ int dump_scan(struct ubus_context *ctx,
 {
 	enum {
 		SCAN_VERBOSE,
+		SCAN_BAND,
 		__SCAN_MAX,
 	};
 
 	static const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
 		[SCAN_VERBOSE] = { .name = "verbose", .type = BLOBMSG_TYPE_BOOL },
+		[SCAN_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
 	};
 
 	struct blob_attr *tb[__SCAN_MAX] = {};
 	struct wifi_phy *phy;
 	bool verbose = false;
 	struct nl_msg *msg;
+	char *band = NULL;
 	void *c;
 
 	blobmsg_parse(scan_policy, __SCAN_MAX, tb, blob_data(_msg), blob_len(_msg));
+
+	if (tb[SCAN_BAND])
+		band = blobmsg_get_string(tb[SCAN_BAND]);
 
 	if (tb[SCAN_VERBOSE])
 		verbose = blobmsg_get_bool(tb[SCAN_VERBOSE]);
@@ -1223,11 +1229,17 @@ int dump_scan(struct ubus_context *ctx,
 
 		if (list_empty(&phy->wifs))
 			continue;
+		if (!band ||
+		    (!strcmp(band, "2G") && phy->band_2g) ||
+		    (!strcmp(band, "5G") && phy->band_5gl) ||
+		    (!strcmp(band, "5G") && phy->band_5gu) ||
+		    (!strcmp(band, "5G") && (phy->band_5gl || phy->band_5gu))) {
 
-		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
-		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SCAN, true);
-		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
-		unl_genl_request(&unl, msg, nl80211_scan_dump_recv, (void *) verbose);
+			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+			msg = unl_genl_msg(&unl, NL80211_CMD_GET_SCAN, true);
+			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+			unl_genl_request(&unl, msg, nl80211_scan_dump_recv, (void *) verbose);
+		}
 	}
 	blobmsg_close_array(&b, c);
 	ubus_send_reply(ctx, req, b.head);
@@ -1236,11 +1248,13 @@ int dump_scan(struct ubus_context *ctx,
 
 enum {
 	SURVEY_CHANNEL,
+	SURVEY_BAND,
 	__SURVEY_MAX,
 };
 
 static const struct blobmsg_policy survey_policy[__SURVEY_MAX] = {
 	[SURVEY_CHANNEL] = { .name = "channel", .type = BLOBMSG_TYPE_INT32 },
+	[SURVEY_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
 };
 
 int dump_survey(struct ubus_context *ctx,
@@ -1252,9 +1266,14 @@ int dump_survey(struct ubus_context *ctx,
 	struct wifi_phy *phy;
 	struct nl_msg *msg;
 	int channel = 0;
+	char *band = NULL;
 	void *c;
 
 	blobmsg_parse(survey_policy, __SURVEY_MAX, tb, blobmsg_data(_msg), blobmsg_data_len(_msg));
+
+	if (tb[SURVEY_BAND])
+		band = blobmsg_get_string(tb[SURVEY_BAND]);
+
 	if (tb[SURVEY_CHANNEL])
 		channel = blobmsg_get_u32(tb[SURVEY_CHANNEL]);
 
@@ -1267,10 +1286,17 @@ int dump_survey(struct ubus_context *ctx,
 		if (list_empty(&phy->wifs))
 			continue;
 
-		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
-		msg = unl_genl_msg(&unl, NL80211_CMD_GET_SURVEY, true);
-		nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
-		unl_genl_request(&unl, msg, nl80211_survey_recv, &channel);
+		if (!band ||
+		    (!strcmp(band, "2G") && phy->band_2g) ||
+		    (!strcmp(band, "5G") && phy->band_5gl) ||
+		    (!strcmp(band, "5G") && phy->band_5gu) ||
+		    (!strcmp(band, "5G") && (phy->band_5gl || phy->band_5gu))) {
+
+			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+			msg = unl_genl_msg(&unl, NL80211_CMD_GET_SURVEY, true);
+			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+			unl_genl_request(&unl, msg, nl80211_survey_recv, &channel);
+		}
 	}
 	if (!channel)
 		blobmsg_close_array(&b, c);
