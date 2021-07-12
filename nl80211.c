@@ -415,6 +415,7 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 			if (tb_band[NL80211_BAND_ATTR_VHT_CAPA])
 				phy->vht_capa = nla_get_u32(tb_band[NL80211_BAND_ATTR_VHT_CAPA]);
 
+#ifdef NL80211_BAND_ATTR_IFTYPE_DATA
 			if (tb_band[NL80211_BAND_ATTR_IFTYPE_DATA]) {
 				struct nlattr *nl_iftype;
 				int rem_band;
@@ -452,7 +453,7 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 					}
 				}
 			}
-
+#endif
 			if (tb_band[NL80211_BAND_ATTR_FREQS]) {
 			        struct nlattr *tb_freq[NL80211_FREQUENCY_ATTR_MAX + 1];
 				struct nlattr *nl_freq = NULL;
