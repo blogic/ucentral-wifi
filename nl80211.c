@@ -649,20 +649,18 @@ static void blobmsg_add_chwidth(struct blob_buf *bbuf, const char *name, uint32_
 
 static int phy_find_hwmon(char *phy, char *hwmon)
 {
-        char tmp[PATH_MAX];
-        glob_t gl;
+	char tmp[PATH_MAX];
+	glob_t gl;
 
-        *hwmon = '\0';
-        snprintf(tmp, sizeof(tmp), "/sys/class/ieee80211/%s/device/hwmon/*", phy);
-        if (glob(tmp, GLOB_NOSORT | GLOB_MARK, NULL, &gl))
-                return -1;
-        if (gl.gl_pathc) {
-                strcpy(hwmon, gl.gl_pathv[0]);
-                strncat(hwmon, "temp1_input", PATH_MAX);
-        }
-        globfree(&gl);
+	*hwmon = '\0';
+	snprintf(tmp, sizeof(tmp), "/sys/class/ieee80211/%s/hwmon*/temp1_input", phy);
+	if (glob(tmp, GLOB_NOSORT | GLOB_MARK, NULL, &gl))
+		return -1;
+	if (gl.gl_pathc)
+		strcpy(hwmon, gl.gl_pathv[0]);
+	globfree(&gl);
 
-        return 0;
+	return 0;
 }
 
 static int phy_get_temp(char *phy)
