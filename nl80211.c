@@ -1261,7 +1261,7 @@ int dump_survey(struct ubus_context *ctx,
 	struct nl_msg *msg;
 	int channel = 0;
 	char *band = NULL;
-	void *c;
+	void *c = NULL;
 
 	blobmsg_parse(survey_policy, __SURVEY_MAX, tb, blobmsg_data(_msg), blobmsg_data_len(_msg));
 
