@@ -53,12 +53,12 @@ static struct avl_tree sta_tree = AVL_TREE_INIT(sta_tree, avl_addrcmp, false, NU
 static void sysfs_find_path(struct wifi_phy *phy)
 {
 	char path[PATH_MAX];
-	char link[PATH_MAX];
+	char link[PATH_MAX] = {};
 	char *start, *stop;
 	glob_t gl;
 	unsigned int seq;
 
-	snprintf(path, sizeof(path), "/sys/class/ieee80211/%s", phy->name);
+	snprintf(path, sizeof(path) - 1, "/sys/class/ieee80211/%s", phy->name);
 	if (readlink(path, link, sizeof(link)) < 0)
 		goto out;
 
