@@ -110,7 +110,7 @@ static int ieee80211_frequency_to_channel(int freq)
 	else if (freq == 5935)
 		return 2;
 	else if (freq >= 5955 && freq <= 7115)
-		return (freq - 5955) / 5;
+		return ((freq - 5955) / 5) + 1;
 	else if (freq >= 58320 && freq <= 64800)
 		return (freq - 56160) / 2160;
 	else
