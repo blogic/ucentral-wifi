@@ -163,18 +163,21 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 	};
 
 	static struct nla_policy stats_policy[NL80211_STA_INFO_MAX + 1] = {
-		[NL80211_STA_INFO_INACTIVE_TIME] = { .type = NLA_U32    },
-		[NL80211_STA_INFO_RX_PACKETS]    = { .type = NLA_U32    },
-		[NL80211_STA_INFO_TX_PACKETS]    = { .type = NLA_U32    },
-		[NL80211_STA_INFO_RX_BITRATE]    = { .type = NLA_NESTED },
-		[NL80211_STA_INFO_TX_BITRATE]    = { .type = NLA_NESTED },
-		[NL80211_STA_INFO_SIGNAL]        = { .type = NLA_U8     },
-		[NL80211_STA_INFO_SIGNAL_AVG]    = { .type = NLA_U8     },
-		[NL80211_STA_INFO_RX_BYTES]      = { .type = NLA_U32    },
-		[NL80211_STA_INFO_TX_BYTES]      = { .type = NLA_U32    },
-		[NL80211_STA_INFO_TX_RETRIES]    = { .type = NLA_U32    },
-		[NL80211_STA_INFO_TX_FAILED]     = { .type = NLA_U32    },
-		[NL80211_STA_INFO_T_OFFSET]      = { .type = NLA_U64    },
+		[NL80211_STA_INFO_INACTIVE_TIME]  = { .type = NLA_U32    },
+		[NL80211_STA_INFO_CONNECTED_TIME] = { .type = NLA_U32    },
+		[NL80211_STA_INFO_RX_PACKETS]     = { .type = NLA_U32    },
+		[NL80211_STA_INFO_TX_PACKETS]     = { .type = NLA_U32    },
+		[NL80211_STA_INFO_RX_BITRATE]     = { .type = NLA_NESTED },
+		[NL80211_STA_INFO_TX_BITRATE]     = { .type = NLA_NESTED },
+		[NL80211_STA_INFO_SIGNAL]         = { .type = NLA_U8     },
+		[NL80211_STA_INFO_SIGNAL_AVG]     = { .type = NLA_U8     },
+		[NL80211_STA_INFO_RX_BYTES]       = { .type = NLA_U32    },
+		[NL80211_STA_INFO_TX_BYTES]       = { .type = NLA_U32    },
+		[NL80211_STA_INFO_TX_RETRIES]     = { .type = NLA_U32    },
+		[NL80211_STA_INFO_TX_FAILED]      = { .type = NLA_U32    },
+		[NL80211_STA_INFO_T_OFFSET]       = { .type = NLA_U64    },
+		[NL80211_STA_INFO_RX_DURATION]    = { .type = NLA_U64    },
+		[NL80211_STA_INFO_TX_DURATION]    = { .type = NLA_U64    },
 		[NL80211_STA_INFO_STA_FLAGS] =
 			{ .minlen = sizeof(struct nl80211_sta_flag_update) },
 	};
@@ -203,8 +206,14 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 		sta->tx_failed[0] = nla_get_u32(sinfo[NL80211_STA_INFO_TX_FAILED]);
 	if (sinfo[NL80211_STA_INFO_T_OFFSET])
 		sta->tx_offset[0] = nla_get_u32(sinfo[NL80211_STA_INFO_T_OFFSET]);
+	if (sinfo[NL80211_STA_INFO_RX_DURATION])
+		sta->rx_duration += nla_get_u64(sinfo[NL80211_STA_INFO_RX_DURATION]);
+	if (sinfo[NL80211_STA_INFO_TX_DURATION])
+		sta->tx_duration += nla_get_u64(sinfo[NL80211_STA_INFO_TX_DURATION]);
 	if (sinfo[NL80211_STA_INFO_INACTIVE_TIME])
-		sta->inactive[0] = nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]);
+		sta->inactive = nla_get_u32(sinfo[NL80211_STA_INFO_INACTIVE_TIME]);
+	if (sinfo[NL80211_STA_INFO_CONNECTED_TIME])
+		sta->connected = nla_get_u32(sinfo[NL80211_STA_INFO_CONNECTED_TIME]);
 	if (sinfo[NL80211_STA_INFO_RX_BITRATE] &&
 	    !nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX, sinfo[NL80211_STA_INFO_RX_BITRATE],
 			      rate_policy))
@@ -956,6 +965,12 @@ int dump_station(struct ubus_context *ctx,
 
 				s = blobmsg_open_table(&b, NULL);
 				blobmsg_add_string(&b, "bssid", sta->saddr);
+				if (sta->connected)
+					blobmsg_add_u32(&b, "connected", sta->connected);
+				if (sta->rx_duration)
+					blobmsg_add_u64(&b, "rx_duration", sta->rx_duration / 1000000);
+				if (sta->tx_duration)
+					blobmsg_add_u64(&b, "tx_duration", sta->tx_duration / 1000000);
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)

@@ -77,7 +77,10 @@ struct wifi_station {
 	uint32_t tx_retries[2];
 	uint32_t tx_failed[2];
 	uint32_t tx_offset[2];
-	uint32_t inactive[2];
+	uint32_t inactive;
+	uint32_t connected;
+	uint64_t rx_duration;
+	uint64_t tx_duration;
 
 	struct sta_rate rx_rate, tx_rate;
 };
