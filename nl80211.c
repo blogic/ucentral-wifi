@@ -967,6 +967,8 @@ int dump_station(struct ubus_context *ctx,
 				blobmsg_add_string(&b, "bssid", sta->saddr);
 				if (sta->connected)
 					blobmsg_add_u32(&b, "connected", sta->connected);
+				if (sta->inactive)
+					blobmsg_add_u32(&b, "inactive", sta->inactive / 1000);
 				if (sta->rx_duration)
 					blobmsg_add_u64(&b, "rx_duration", sta->rx_duration / 1000000);
 				if (sta->tx_duration)
