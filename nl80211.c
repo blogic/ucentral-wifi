@@ -192,6 +192,8 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 		return;
 	if (sinfo[NL80211_STA_INFO_SIGNAL_AVG])
 		sta->rssi = (int32_t) nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL_AVG]);
+	else if (sinfo[NL80211_STA_INFO_SIGNAL])
+		sta->rssi = (int32_t) nla_get_u8(sinfo[NL80211_STA_INFO_SIGNAL]);
 	if (sinfo[NL80211_STA_INFO_RX_PACKETS])
 		sta->rx_packets[0] = nla_get_u32(sinfo[NL80211_STA_INFO_RX_PACKETS]);
 	if (sinfo[NL80211_STA_INFO_TX_PACKETS])
