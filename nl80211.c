@@ -1047,6 +1047,8 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 	print_mac(mac, nla_data(bss[NL80211_BSS_BSSID]));
 	c = blobmsg_open_table(&b, mac);
 
+	if (bss[NL80211_BSS_BSSID])
+		blobmsg_add_string(&b, "bssid", mac);
 	if (verbose && bss[NL80211_BSS_TSF])
 		blobmsg_add_u64(&b, "tsf", nla_get_u64(bss[NL80211_BSS_TSF]));
 	if (bss[NL80211_BSS_FREQUENCY])
