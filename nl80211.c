@@ -493,9 +493,12 @@ static void nl80211_add_phy(struct nlattr **tb, char *name)
 						phy->chandisabled[chan] = 1;
 						continue;
 					}
+					if (tb_freq[NL80211_FREQUENCY_ATTR_RADAR])
+						phy->chandfs[chan] = 1;
+
 					phy->freq[chan] = freq;
 					phy->channel[chan] = 1;
-					phy->chandfs[chan] = 1;
+
 					if (tb_freq[NL80211_FREQUENCY_ATTR_MAX_TX_POWER] &&
 					    !tb_freq[NL80211_FREQUENCY_ATTR_DISABLED])
 						phy->chanpwr[chan] = nla_get_u32(tb_freq[NL80211_FREQUENCY_ATTR_MAX_TX_POWER]) / 10;
@@ -824,8 +827,16 @@ int dump_phy(struct ubus_context *ctx,
 			if (phy->channel[ch])
 				blobmsg_add_u16(&b, NULL, ch);
 		}
-
 		blobmsg_close_array(&b, c);
+
+		if (!phy->band_2g) {
+			c = blobmsg_open_array(&b, "dfs_channels");
+			for (ch = 0; ch < IEEE80211_CHAN_MAX; ch++) {
+				if (phy->channel[ch] && phy->chandfs[ch])
+					blobmsg_add_u16(&b, NULL, ch);
+			}
+			blobmsg_close_array(&b, c);
+		}
 
 		c = blobmsg_open_array(&b, "frequencies");
 		for (freq = 0; freq < IEEE80211_CHAN_MAX; freq++) {
