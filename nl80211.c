@@ -1168,6 +1168,11 @@ nl80211_survey_recv(struct nl_msg *msg, void *arg)
 	return NL_OK;
 }
 
+unsigned int frequency_list_80MHz[] = { 5180, 5260, 5500, 5580, 5660, 5745 };
+unsigned int frequency_list_40MHz[] = { 5180, 5220, 5260, 5300, 5500, 5540,
+					5580, 5620, 5660, 5745, 5785, 5825, 5865,
+					5920, 5960 };
+
 const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
 	[SCAN_BAND] = { .name = "band", .type = BLOBMSG_TYPE_STRING },
 	[SCAN_CHANNELS] = { .name = "channels", .type = BLOBMSG_TYPE_ARRAY },
@@ -1198,13 +1203,54 @@ int trigger_scan(struct ubus_context *ctx,
 
 		if (list_empty(&phy->wifs))
 			continue;
+		wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+
+		fprintf(stderr, "%s:%s[%d]%d %d %d %d %p\n", __FILE__, __func__, __LINE__, phy->band_5gl, phy->band_5gu, phy->band_2g,
+			wif->width, band);
+		if ((phy->band_5gl || phy->band_5gu) &&
+		    ((wif->width == NL80211_CHAN_WIDTH_40) || (wif->width == NL80211_CHAN_WIDTH_80)) &&
+		    (!band || !strcmp(band, "5G"))) {
+			unsigned int *freqs = frequency_list_40MHz;
+			unsigned int len = ARRAY_SIZE(frequency_list_40MHz);
+			unsigned int offset = 10;
+			unsigned int width = 40;
+			unsigned int i;
+
+			fprintf(stderr, "%s:%s[%d]40\n", __FILE__, __func__, __LINE__);
+
+			if (wif->width == NL80211_CHAN_WIDTH_80) {
+				freqs = frequency_list_80MHz;
+				len = ARRAY_SIZE(frequency_list_80MHz);
+				width = 80;
+				offset = 30;
+				fprintf(stderr, "%s:%s[%d]80\n", __FILE__, __func__, __LINE__);
+			}
+
+			for (i = 0; i < len; i++) {
+				fprintf(stderr, "%s:%s[%d]%d %d %d\n", __FILE__, __func__, __LINE__, freqs[i], freqs[i] + offset, wif->width);
+				msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
+				nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
+				nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
+				nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, freqs[i]);
+				nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ1, freqs[i] + offset);
+				nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH, width);
+				if (!passive) {
+					struct nl_msg *ssids;
+
+					ssids = nlmsg_alloc();
+					nla_put(ssids, 1, 0, "");
+					nla_put_nested(msg, NL80211_ATTR_SCAN_SSIDS, ssids);
+				}
+				unl_genl_request(&unl, msg, NULL, NULL);
+			}
+			continue;
+		}
+
 		if (!band ||
 		    (!strcmp(band, "2G") && phy->band_2g) ||
-		    (!strcmp(band, "5G") && phy->band_5gl) ||
-		    (!strcmp(band, "5G") && phy->band_5gu) ||
 		    (!strcmp(band, "5G") && (phy->band_5gl || phy->band_5gu))) {
 
-			wif = list_first_entry(&phy->wifs, struct wifi_iface, phy);
+			syslog(0, "blogic %s:%s[%d]normal\n", __FILE__, __func__, __LINE__);
 			msg = unl_genl_msg(&unl, NL80211_CMD_TRIGGER_SCAN, false);
 			nla_put_u32(msg, NL80211_ATTR_IFINDEX, if_nametoindex(wif->name));
 			nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, NL80211_SCAN_FLAG_AP);
