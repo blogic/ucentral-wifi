@@ -1050,7 +1050,7 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 	struct nlattr *tb[NL80211_ATTR_MAX + 1] = {};
 	char mac[18], ssid[33] = {};
 	bool verbose = (bool) arg;
-	void *c;
+	void *c, *d;
 
 	nla_parse(tb, NL80211_ATTR_MAX, genlmsg_attrdata(gnlh, 0), genlmsg_attrlen(gnlh, 0), NULL);
 
@@ -1075,7 +1075,7 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 	if (bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
 		int ielen = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
 		unsigned char *ie = nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
-		int len;
+		int len, i;
 
 		while (ielen >= 2 && ielen >= ie[1]) {
 			switch (ie[0]) {
@@ -1086,6 +1086,13 @@ nl80211_scan_dump_recv(struct nl_msg *msg, void *arg)
 				ssid[len] = 0;
 				if (len)
 					blobmsg_add_string(&b, "ssid", ssid);
+				break;
+			case 0x3d: /* HT Oper */
+			case 0xc0: /* VHT Oper */
+				d = blobmsg_open_array(&b, ie[0] == 0x3d ? "ht_oper" : "vht_oper");
+				for (i = 0; i < ie[1]; i++)
+					blobmsg_add_u32(&b, NULL, ie[2 + i]);
+				blobmsg_close_table(&b, d);
 				break;
 			}
 
