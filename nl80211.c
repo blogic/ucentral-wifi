@@ -960,7 +960,23 @@ int dump_station(struct ubus_context *ctx,
 		 struct ubus_request_data *req,
 		 const char *method, struct blob_attr *msg)
 {
+	enum {
+		DUMP_DELTA,
+		__DUMP_MAX
+	};
+
+	static const struct blobmsg_policy dump_policy[__DUMP_MAX] = {
+		[DUMP_DELTA] = { .name = "delta", .type = BLOBMSG_TYPE_INT32 },
+	};
+
+	struct blob_attr *tb[__DUMP_MAX];
 	struct wifi_phy *phy;
+	int delta = 0;
+
+	blobmsg_parse(dump_policy, __DUMP_MAX, tb, blob_data(msg), blob_len(msg));
+
+	if (tb[DUMP_DELTA])
+		delta = blobmsg_get_u32(tb[DUMP_DELTA]);
 
 	blob_buf_init(&b, 0);
 
@@ -975,7 +991,7 @@ int dump_station(struct ubus_context *ctx,
 				continue;
 
 			list_for_each_entry(sta, &wif->stas, iface) {
-				void *s;
+				void *s, *d;
 
 				if (!w)
 					w = blobmsg_open_array(&b, wif->name);
@@ -994,21 +1010,42 @@ int dump_station(struct ubus_context *ctx,
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)
-					blobmsg_add_u32(&b, "rx_packets", get_counter_delta(sta->rx_packets));
+					blobmsg_add_u32(&b, "rx_packets", sta->rx_packets[0]);
 				if (sta->tx_packets)
-					blobmsg_add_u32(&b, "tx_packets", get_counter_delta(sta->tx_packets));
+					blobmsg_add_u32(&b, "tx_packets", sta->tx_packets[0]);
 				if (sta->rx_bytes)
-					blobmsg_add_u32(&b, "rx_bytes", get_counter_delta(sta->rx_bytes));
+					blobmsg_add_u32(&b, "rx_bytes", sta->rx_bytes[0]);
 				if (sta->tx_bytes)
-					blobmsg_add_u32(&b, "tx_bytes", get_counter_delta(sta->tx_bytes));
+					blobmsg_add_u32(&b, "tx_bytes", sta->tx_bytes[0]);
 				if (sta->tx_retries)
-					blobmsg_add_u32(&b, "tx_retries", get_counter_delta(sta->tx_retries));
+					blobmsg_add_u32(&b, "tx_retries", sta->tx_retries[0]);
 				if (sta->tx_failed)
-					blobmsg_add_u32(&b, "tx_failed", get_counter_delta(sta->tx_failed));
+					blobmsg_add_u32(&b, "tx_failed", sta->tx_failed[0]);
 				if (sta->tx_offset)
-					blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
+					blobmsg_add_u32(&b, "tx_offset", sta->tx_offset[0]);
 				if (sta->tx_offset)
-					blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
+					blobmsg_add_u32(&b, "tx_offset", sta->tx_offset[0]);
+
+				if (delta) {
+					d = blobmsg_open_table(&b, "deltas");
+					if (sta->rx_packets)
+						blobmsg_add_u32(&b, "rx_packets", get_counter_delta(sta->rx_packets));
+					if (sta->tx_packets)
+						blobmsg_add_u32(&b, "tx_packets", get_counter_delta(sta->tx_packets));
+					if (sta->rx_bytes)
+						blobmsg_add_u32(&b, "rx_bytes", get_counter_delta(sta->rx_bytes));
+					if (sta->tx_bytes)
+						blobmsg_add_u32(&b, "tx_bytes", get_counter_delta(sta->tx_bytes));
+					if (sta->tx_retries)
+						blobmsg_add_u32(&b, "tx_retries", get_counter_delta(sta->tx_retries));
+					if (sta->tx_failed)
+						blobmsg_add_u32(&b, "tx_failed", get_counter_delta(sta->tx_failed));
+					if (sta->tx_offset)
+						blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
+					if (sta->tx_offset)
+						blobmsg_add_u32(&b, "tx_offset", get_counter_delta(sta->tx_offset));
+					blobmsg_close_table(&b, d);
+				}
 				dump_rate("rx_rate", &sta->rx_rate);
 				dump_rate("tx_rate", &sta->tx_rate);
 				blobmsg_close_table(&b, s);
