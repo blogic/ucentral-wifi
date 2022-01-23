@@ -82,6 +82,11 @@ struct wifi_station {
 	uint64_t rx_duration;
 	uint64_t tx_duration;
 
+	uint64_t rx_msdu[16];
+	uint64_t tx_msdu[16];
+	uint64_t tx_msdu_retries[16];
+	uint64_t tx_msdu_failed[16];
+
 	struct sta_rate rx_rate, tx_rate;
 };
 

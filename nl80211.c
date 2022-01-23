@@ -153,6 +153,41 @@ static void nl80211_parse_rateinfo(struct sta_rate *sta,struct nlattr **ri, char
 		sta->sgi = 1;
 }
 
+static void parse_tid_stats(struct wifi_station *sta, struct nlattr *tid_stats_attr)
+{
+	struct nlattr *stats_info[NL80211_TID_STATS_MAX + 1], *tidattr, *info;
+	static struct nla_policy stats_policy[NL80211_TID_STATS_MAX + 1] = {
+		[NL80211_TID_STATS_RX_MSDU] = { .type = NLA_U64 },
+		[NL80211_TID_STATS_TX_MSDU] = { .type = NLA_U64 },
+		[NL80211_TID_STATS_TX_MSDU_RETRIES] = { .type = NLA_U64 },
+		[NL80211_TID_STATS_TX_MSDU_FAILED] = { .type = NLA_U64 },
+		[NL80211_TID_STATS_TXQ_STATS] = { .type = NLA_NESTED },
+	};
+	int rem, i = 0;
+
+	nla_for_each_nested(tidattr, tid_stats_attr, rem) {
+		if (nla_parse_nested(stats_info, NL80211_TID_STATS_MAX,
+				     tidattr, stats_policy)) {
+			return;
+		}
+		if (i >= 16)
+			return;
+		info = stats_info[NL80211_TID_STATS_RX_MSDU];
+		if (info)
+			sta->rx_msdu[i] = (unsigned long long)nla_get_u64(info);
+		info = stats_info[NL80211_TID_STATS_TX_MSDU];
+		if (info)
+			sta->tx_msdu[i] = (unsigned long long)nla_get_u64(info);
+		info = stats_info[NL80211_TID_STATS_TX_MSDU_RETRIES];
+		if (info)
+			sta->tx_msdu_retries[i] = (unsigned long long)nla_get_u64(info);
+		info = stats_info[NL80211_TID_STATS_TX_MSDU_FAILED];
+		if (info)
+			sta->tx_msdu_failed[i] = (unsigned long long)nla_get_u64(info);
+		i++;
+	}
+}
+
 static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 {
 	static struct nla_policy rate_policy[NL80211_RATE_INFO_MAX + 1] = {
@@ -180,6 +215,7 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 		[NL80211_STA_INFO_TX_DURATION]    = { .type = NLA_U64    },
 		[NL80211_STA_INFO_STA_FLAGS] =
 			{ .minlen = sizeof(struct nl80211_sta_flag_update) },
+		[NL80211_STA_INFO_TID_STATS]      = { .type = NLA_NESTED },
 	};
 
 	struct nlattr *rinfo[NL80211_RATE_INFO_MAX + 1];
@@ -224,6 +260,9 @@ static void vif_update_stats(struct wifi_station *sta, struct nlattr **tb)
 	    !nla_parse_nested(rinfo, NL80211_RATE_INFO_MAX, sinfo[NL80211_STA_INFO_TX_BITRATE],
 			      rate_policy))
 		nl80211_parse_rateinfo(&sta->tx_rate, rinfo, "tx_rate");
+
+	if (sinfo[NL80211_STA_INFO_TID_STATS])
+		parse_tid_stats(sta, sinfo[NL80211_STA_INFO_TID_STATS]);
 }
 
 static void nl80211_add_station(struct nlattr **tb, char *ifname)
@@ -992,6 +1031,7 @@ int dump_station(struct ubus_context *ctx,
 
 			list_for_each_entry(sta, &wif->stas, iface) {
 				void *s, *d;
+				int i;
 
 				if (!w)
 					w = blobmsg_open_array(&b, wif->name);
@@ -1048,6 +1088,17 @@ int dump_station(struct ubus_context *ctx,
 				}
 				dump_rate("rx_rate", &sta->rx_rate);
 				dump_rate("tx_rate", &sta->tx_rate);
+				d = blobmsg_open_array(&b, "msdu");
+				for (i = 0; i< 16; i++) {
+					void *t = blobmsg_open_table(&b, "msdu");
+
+					blobmsg_add_u64(&b, "rx_msdu", sta->rx_msdu[i]);
+					blobmsg_add_u64(&b, "tx_msdu", sta->tx_msdu[i]);
+					blobmsg_add_u64(&b, "tx_msdu_retries", sta->tx_msdu_retries[i]);
+					blobmsg_add_u64(&b, "tx_msdu_failed", sta->tx_msdu_failed[i]);
+					blobmsg_close_table(&b, t);
+				}
+				blobmsg_close_array(&b, d);
 				blobmsg_close_table(&b, s);
 			}
 			if (w)
