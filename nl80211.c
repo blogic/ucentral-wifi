@@ -1044,9 +1044,9 @@ int dump_station(struct ubus_context *ctx,
 				if (sta->inactive)
 					blobmsg_add_u32(&b, "inactive", sta->inactive / 1000);
 				if (sta->rx_duration)
-					blobmsg_add_u64(&b, "rx_duration", sta->rx_duration / 1000000);
+					blobmsg_add_u64(&b, "rx_duration", sta->rx_duration);
 				if (sta->tx_duration)
-					blobmsg_add_u64(&b, "tx_duration", sta->tx_duration / 1000000);
+					blobmsg_add_u64(&b, "tx_duration", sta->tx_duration);
 				if (sta->rssi)
 					blobmsg_add_u32(&b, "rssi", sta->rssi);
 				if (sta->rx_packets)
