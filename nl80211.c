@@ -1037,7 +1037,7 @@ int dump_station(struct ubus_context *ctx,
 					w = blobmsg_open_array(&b, wif->name);
 
 				s = blobmsg_open_table(&b, NULL);
-				blobmsg_add_string(&b, "bssid", sta->saddr);
+				blobmsg_add_string(&b, "bssid", wif->saddr);
 				blobmsg_add_string(&b, "station", sta->saddr);
 				if (sta->connected)
 					blobmsg_add_u32(&b, "connected", sta->connected);
