@@ -700,29 +700,44 @@ static void blobmsg_add_chwidth(struct blob_buf *bbuf, const char *name, uint32_
 	}
 }
 
-static int phy_find_hwmon(char *phy, char *hwmon)
+static int phy_find_hwmon_helper(char *dir, char *file, char *hwmon)
+{
+	glob_t gl;
+	if (glob(dir, GLOB_NOSORT | GLOB_MARK, NULL, &gl))
+		return -1;
+	if (gl.gl_pathc) {
+		strcpy(hwmon, gl.gl_pathv[0]);
+		strncat(hwmon, file, PATH_MAX);
+	}
+	globfree(&gl);
+	return 0;
+}
+
+static int phy_find_hwmon(char *phy, char *hwmon, bool *DegreesNotMilliDegrees)
 {
 	char tmp[PATH_MAX];
-	glob_t gl;
-
 	*hwmon = '\0';
-	snprintf(tmp, sizeof(tmp), "/sys/class/ieee80211/%s/hwmon*/temp1_input", phy);
-	if (glob(tmp, GLOB_NOSORT | GLOB_MARK, NULL, &gl))
-		return -1;
-	if (gl.gl_pathc)
-		strcpy(hwmon, gl.gl_pathv[0]);
-	globfree(&gl);
-
-	return 0;
+	snprintf(tmp, sizeof(tmp), "/sys/class/ieee80211/%s/device/hwmon/*", phy);
+	if (!phy_find_hwmon_helper(tmp, "temp1_input", hwmon)) {
+		*DegreesNotMilliDegrees=false;
+		return 0;
+	}
+	snprintf(tmp, sizeof(tmp), "/sys/class/ieee80211/%s/cooling_device/subsystem/thermal_zone0/", phy);
+	if (!phy_find_hwmon_helper(tmp, "temp", hwmon)) {
+		*DegreesNotMilliDegrees=true;
+		return 0;
+	}
+	return -1;
 }
 
 static int phy_get_temp(char *phy)
 {
 	char hwmon_path[PATH_MAX];
+	bool DegreesNotMilliDegrees;
 	FILE *fp = NULL;
 	int32_t t = 0;
 
-	if (phy_find_hwmon(phy, hwmon_path))
+	if (phy_find_hwmon(phy, hwmon_path, &DegreesNotMilliDegrees))
 		return -1;
 
 	fp = fopen(hwmon_path, "r");
@@ -731,8 +746,12 @@ static int phy_get_temp(char *phy)
 	if (fscanf(fp,"%d", &t) == EOF)
 		t = 0;
 	fclose(fp);
-
-	return t;
+	
+	if (DegreesNotMilliDegrees) {
+		return t;
+	} else {
+		return t / 1000;
+	}
 }
 
 static char *iftype_string[NUM_NL80211_IFTYPES] = {
@@ -858,8 +877,8 @@ int dump_phy(struct ubus_context *ctx,
 			blobmsg_add_u32(&b, "tx_ant", phy->tx_ant_avail);
 		if (phy->rx_ant_avail)
 			blobmsg_add_u32(&b, "rx_ant", phy->rx_ant_avail);
-		if (temp / 1000)
-			blobmsg_add_u32(&b, "temperature", temp / 1000);
+		if (temp)
+			blobmsg_add_u32(&b, "temperature", temp);
 
 		c = blobmsg_open_array(&b, "channels");
 		for (ch = 0; ch < IEEE80211_CHAN_MAX; ch++) {
