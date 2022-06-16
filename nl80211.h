@@ -10,7 +10,7 @@
 #include <libubox/avl.h>
 #include <libubox/vlist.h>
 
-#define IEEE80211_CHAN_MAX (196 + 1)
+#define IEEE80211_CHAN_MAX (233 + 1)
 
 struct wifi_phy {
 	struct avl_node avl;
